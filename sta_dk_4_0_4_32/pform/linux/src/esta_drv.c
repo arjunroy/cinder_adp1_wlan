@@ -105,6 +105,18 @@
 #include "Ethernet.h"
 #include "tiwlan_profile.h"
 
+#ifdef CONFIG_CINDER
+
+/* TODO: Adjust the actual power draw values */
+#define TIWLAN_IDLE_POWER_DRAW 0
+#define TIWLAN_IDLE_DRAW_MS_INTERVAL 1000
+#define TIWLAN_SEND_POWER_DRAW 0
+#define TIWLAN_SEND_POWER_BYTE_INTERVAL 1000
+#define TIWLAN_RCV_POWER_DRAW 0
+#define TIWLAN_RCV_POWER_BYTE_INTERVAL 1000
+
+#endif
+
 #if defined(CONFIG_TROUT_PWRSINK) || defined(CONFIG_HTC_PWRSINK)
 #define RX_RATE_INTERVAL_SEC 10
 unsigned long num_rx_pkt_new = 0;
@@ -1205,6 +1217,9 @@ int tiwlan_init_drv (tiwlan_net_dev_t *drv, tiwlan_dev_init_t *init_info)
 {
     initTable_t *init_table;
     int rc;
+#ifdef CONFIG_CINDER
+	int err;
+#endif
     void *pWLAN_Images[4];
 
     /* printk("%s\n", __FUNCTION__); */
@@ -1422,6 +1437,19 @@ int tiwlan_init_drv (tiwlan_net_dev_t *drv, tiwlan_dev_init_t *init_info)
         /* Mark that init stage has succeded */
         drv->initialized = 1;
 
+#ifdef CONFIG_CINDER
+		err = __find_or_add_netdev_to_power_acct_registry(drv->netdev,
+			TIWLAN_IDLE_POWER_DRAW, TIWLAN_IDLE_DRAW_MS_INTERVAL, 
+			TIWLAN_SEND_POWER_DRAW, TIWLAN_SEND_POWER_BYTE_INTERVAL, 
+			TIWLAN_RCV_POWER_DRAW, TIWLAN_RCV_POWER_BYTE_INTERVAL);
+		if (err) {
+			printk("NOTE: Unable to add tiwlan device to netdev power reg: %d.\n", err);
+			/* TODO: Handle error? */
+		}
+		else
+			printk("Added tiwlan device to netdev power reg success.\n");
+#endif
+		printk("XXXX TIWLAN init for netdev was called here.\n");
         return 0;
     }
 
@@ -1487,6 +1515,9 @@ int tiwlan_start_drv(tiwlan_net_dev_t *drv)
 static void tiwlan_destroy_drv(tiwlan_net_dev_t *drv)
 {
     int waitShutdownCounter;
+#ifdef CONFIG_CINDER
+	int err;
+#endif
 
     /* close the ipc_kernel socket*/
     if (drv && drv->wl_sock) {
@@ -1574,6 +1605,18 @@ static void tiwlan_destroy_drv(tiwlan_net_dev_t *drv)
     android_uninit_suspend_lock(&drv->exec_wake_lock);
 #endif
     unregister_netdev(drv->netdev);
+
+#ifdef CONFIG_CINDER
+	err = __disassociate_netdev_from_power_acct_registry(drv->netdev);
+	if (err) {
+		printk("NOTE: Error removing netdev from power acct registry.: %d\n", err);
+		/* TODO: Handle error? */
+	}
+	else
+		printk("Removed tiwlan device to netdev power reg success.\n");
+#endif
+	printk("XXX unregister netdev called for tiwlan\n");
+
     tiwlan_free_drv(drv);
 }
 
